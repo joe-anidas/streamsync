@@ -9,7 +9,7 @@ const Register = () => {
   
   const handleRegister = async (e) => {
     e.preventDefault();
-    const res = await fetch("http://localhost:3000/register", {
+    const res = await fetch(`${import.meta.env.VITE_REACT_APP_BACKEND_BASEURL}/register`, {
       method: "POST",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
@@ -25,7 +25,7 @@ const Register = () => {
   };
   
   const handleGoogleSignIn = () => {
-    window.location.href = "http://localhost:3000/auth/google";
+    window.location.href = `${import.meta.env.VITE_REACT_APP_BACKEND_BASEURL}/auth/google`;
   };
   
   return (

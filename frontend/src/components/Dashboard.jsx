@@ -11,7 +11,7 @@ const Dashboard = () => {
 
   useEffect(() => {
     const fetchUser = async () => {
-      const res = await fetch("http://localhost:3000/dashboard", {
+      const res = await fetch(`${import.meta.env.VITE_REACT_APP_BACKEND_BASEURL}/dashboard`, {
         method: "GET",
         credentials: "include",
       });
@@ -27,7 +27,7 @@ const Dashboard = () => {
   }, [navigate]);
 
   const handleLogout = async () => {
-    const res = await fetch("http://localhost:3000/logout", {
+    const res = await fetch(`${import.meta.env.VITE_REACT_APP_BACKEND_BASEURL}/logout`, {
       method: "GET",
       credentials: "include",
     });
