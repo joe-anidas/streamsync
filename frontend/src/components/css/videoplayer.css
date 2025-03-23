@@ -1,0 +1,45 @@
+.video-player {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    max-width: 1200px;
+    margin: 0 auto;
+    min-height: 100vh;
+    background-color: #121212;
+    color: white;
+  }
+  
+  h1 {
+    margin-bottom: 2rem;
+    font-size: 2.5rem;
+    font-weight: 600;
+    text-align: center;
+  }
+  
+  video {
+    width: 100%;
+    max-width: 800px;
+    border-radius: 8px;
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.3);
+    background-color: #000;
+  }
+  
+  /* Improve video controls styling */
+  video::-webkit-media-controls {
+    background-color: rgba(0, 0, 0, 0.5);
+    border-radius: 8px;
+  }
+  
+  /* Responsive adjustments */
+  @media (max-width: 768px) {
+    .video-player {
+      padding: 1rem;
+    }
+    
+    h1 {
+      font-size: 1.8rem;
+      margin-bottom: 1.5rem;
+    }
+  }

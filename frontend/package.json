@@ -11,8 +11,10 @@
   },
   "dependencies": {
     "axios": "^1.8.4",
+    "hls.js": "^1.5.20",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "react-login-page": "^1.0.4",
     "react-router-dom": "^7.4.0",
     "react-slick": "^0.30.3",
     "slick-carousel": "^1.8.1"

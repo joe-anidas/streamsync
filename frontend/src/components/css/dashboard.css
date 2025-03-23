@@ -80,11 +80,47 @@ body {
   border: 2px solid #fff;
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
+  position: relative;
 }
 
 .profile-image:hover {
   transform: scale(1.05);
   box-shadow: 0 3px 8px rgba(0, 0, 0, 0.15);
+}
+
+.profile-image:hover + .email-tooltip {
+  display: block;
+}
+
+.email-tooltip {
+  display: none;
+  position: absolute;
+  top: 50px;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: #fff;
+  color: #333;
+  padding: 10px;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  white-space: nowrap;
+}
+
+/* Logout Button */
+.logout-btn {
+  background-color: #3182ce;
+  color: white;
+  padding: 10px 20px;
+  border-radius: 25px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.2s ease, transform 0.2s ease;
+}
+
+.logout-btn:hover {
+  background-color: #2b6cb0;
+  transform: translateY(-2px);
 }
 
 /* Live Streaming Button */

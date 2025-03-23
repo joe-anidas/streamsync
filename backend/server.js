@@ -8,12 +8,16 @@ import { Strategy as GoogleStrategy } from "passport-google-oauth2";
 import session from "express-session";
 import env from "dotenv";
 import cors from "cors";
+import { WebSocketServer, WebSocket } from "ws"; // Import WebSocketServer & WebSocket
+import http from "http"; // Import http module
 
 env.config();
 
 const app = express();
 const port = 3000;
+const wsPort = 8080; // WebSocket runs on port 8080
 const saltRounds = 10;
+const wss = new WebSocketServer({ port: wsPort });
 
 // Enable CORS for frontend requests
 app.use(
@@ -26,14 +30,13 @@ app.use(
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
-app.use(
-  session({
-    secret: process.env.SESSION_SECRET,
-    resave: false,
-    saveUninitialized: false,
-  })
-);
+const sessionParser = session({
+  secret: process.env.SESSION_SECRET,
+  resave: false,
+  saveUninitialized: false,
+});
 
+app.use(sessionParser);
 app.use(passport.initialize());
 app.use(passport.session());
 
@@ -123,7 +126,7 @@ app.post("/login", (req, res, next) => {
   passport.authenticate("local", (err, user, info) => {
     if (err) return res.status(500).json({ error: "Server error" });
     if (!user) return res.status(401).json({ error: info.message || "Invalid credentials" });
-    
+
     req.logIn(user, (err) => {
       if (err) return res.status(500).json({ error: "Login failed" });
       res.json({ message: "Login successful" });
@@ -154,6 +157,61 @@ app.get(
   }
 );
 
+// Start Express server
 app.listen(port, () => {
-  console.log(`Server running on port ${port}`);
+  console.log(`Express server running on port ${port}`);
 });
+
+
+wss.on("connection", (ws, req) => {
+  console.log("New WebSocket client connected");
+
+  ws.isAlive = true;
+
+  ws.on("pong", () => {
+    ws.isAlive = true;
+  });
+
+  // Handle incoming messages
+  ws.on("message", (message) => {
+    try {
+      const data = JSON.parse(message);
+
+      // Handle chat messages
+      if (data.type === "chat") {
+        console.log(`Chat message from ${data.username}: ${data.message}`);
+
+        // Broadcast the chat message to all connected clients
+        wss.clients.forEach((client) => {
+          if (client.readyState === WebSocket.OPEN) {
+            client.send(
+              JSON.stringify({
+                type: "chat",
+                username: data.username,
+                message: data.message,
+                timestamp: new Date().toISOString(),
+              })
+            );
+          }
+        });
+      }
+    } catch (error) {
+      console.error("Invalid WebSocket message received:", error);
+    }
+  });
+
+  ws.on("close", () => {
+    console.log("WebSocket client disconnected");
+  });
+});
+
+// WebSocket Heartbeat (Prevents Unexpected Disconnections)
+setInterval(() => {
+  wss.clients.forEach((ws) => {
+    if (!ws.isAlive) return ws.terminate();
+    ws.isAlive = false;
+    ws.ping();
+  });
+}, 30000);
+
+console.log(`WebSocket server is running on ws://localhost:${wsPort}`);

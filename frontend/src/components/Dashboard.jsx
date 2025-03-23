@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import logo from "./img/logo.jpg";
-import "./css/home.css";
+import "./css/dashboard.css";
 import VideoGallery from "./VideoGallery";
 
 const Dashboard = () => {
@@ -61,40 +61,45 @@ const Dashboard = () => {
     navigate('/live-stream');
   };
 
-  return (
-    <div>
-      <header id="header">
-        <div className="logo-container">
-          <img src={logo} alt="StreamSync Logo" className="logo" />
-          <h1 className="app-name">StreamSync</h1>
-        </div>
-        <div className="search-bar">
-          <input type="text" placeholder="Search videos, channels, or categories..." />
-        </div>
-        <img src="https://via.placeholder.com/150" alt="Profile" className="profile-image" />
-        <button className="logout-btn" onClick={handleLogout}>Logout</button>
-      </header><br></br><br></br><br></br><br></br><br></br><br></br>
-<VideoGallery />
-      <button className="live-stream-button" onClick={navigateToLiveStream}>
-        <span className="live-icon"></span>
-        Go Live
-      </button>
+ // ...existing code...
+ return (
+  <div>
+    <header id="header">
+      <div className="logo-container">
+        <img src={logo} alt="StreamSync Logo" className="logo" />
+        <h1 className="app-name">StreamSync</h1>
+      </div>
+      <div className="search-bar">
+        <input type="text" placeholder="Search videos, channels, or categories..." />
+      </div>
+      <div className="profile-container">
+        <span className="profile-name">{userEmail}</span>
+      </div>
+      <button className="logout-btn" onClick={handleLogout}>Logout</button>
+    </header>
+    <br></br><br></br><br></br><br></br><br></br><br></br>
+    <VideoGallery />
+    <button className="live-stream-button" onClick={navigateToLiveStream}>
+      <span className="live-icon"></span>
+      Go Live
+    </button>
 
-      <footer id="footer">
-        <div className="footer-content">
-          <div className="footer-links">
-            <a href="/about">About</a>
-            <a href="/contact">Contact</a>
-            <a href="/privacy">Privacy</a>
-            <a href="/terms">Terms</a>
-          </div>
+    <footer id="footer">
+      <div className="footer-content">
+        <div className="footer-links">
+          <a href="/about">About</a>
+          <a href="/contact">Contact</a>
+          <a href="/privacy">Privacy</a>
+          <a href="/terms">Terms</a>
         </div>
-        <div className="copyright">
-          © 2025 StreamSync. All rights reserved.
-        </div>
-      </footer>
-    </div>
-  );
-};
+      </div>
+      <div className="copyright">
+        © 2025 StreamSync. All rights reserved.
+      </div>
+    </footer>
+  </div>
+);
+// ...existing code...
+}
 
 export default Dashboard;
