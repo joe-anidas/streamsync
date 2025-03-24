@@ -17,51 +17,62 @@ const app = express();
 const port = process.env.PORT || 3000;
 const saltRounds = 10;
 
-// Create an HTTP server for Express and WebSocket
+// Create HTTP server for Express + WebSocket
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server });
 
-// Enable CORS
-app.use(
-  cors({
-    origin:"*",
-    methods: ["GET", "POST"],
-    credentials: true,
-    allowedHeaders: ["Content-Type", "Authorization"],
-  })
-);
+// ================== CORS Configuration ==================
+const corsOptions = {
+  origin: process.env.FRONTEND_URL || "https://streamsync-puce.vercel.app",
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  credentials: true,
+  allowedHeaders: ["Content-Type", "Authorization"],
+};
 
+app.use(cors(corsOptions));
+app.options("*", cors(corsOptions)); // Handle preflight requests
+
+// ================== Middleware ==================
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
-// Express session setup
+// Session configuration
 const sessionParser = session({
-  secret: process.env.SESSION_SECRET,
+  secret: process.env.SESSION_SECRET || "default_session_secret",
   resave: false,
   saveUninitialized: false,
+  cookie: {
+    secure: process.env.NODE_ENV === "production", // HTTPS in production
+    sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+    maxAge: 24 * 60 * 60 * 1000, // 24 hours
+  },
 });
 
 app.use(sessionParser);
 app.use(passport.initialize());
 app.use(passport.session());
 
-// MongoDB Connection
+// ================== MongoDB Connection ==================
 mongoose
-  .connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true })
+  .connect(process.env.MONGO_URI, { 
+    useNewUrlParser: true, 
+    useUnifiedTopology: true 
+  })
   .then(() => console.log("✅ Connected to MongoDB"))
   .catch((err) => {
     console.error("❌ MongoDB Connection Error:", err);
     process.exit(1);
   });
 
-// User Schema & Model
+// ================== User Model ==================
 const userSchema = new mongoose.Schema({
   email: String,
   password: String,
 });
 const User = mongoose.model("User", userSchema);
 
-// Passport Local Strategy
+// ================== Passport Strategies ==================
+// Local Strategy (Email/Password)
 passport.use(
   new LocalStrategy(async (username, password, done) => {
     try {
@@ -76,7 +87,7 @@ passport.use(
   })
 );
 
-// Passport Google Strategy
+// Google OAuth Strategy
 passport.use(
   new GoogleStrategy(
     {
@@ -99,6 +110,7 @@ passport.use(
   )
 );
 
+// Serialize/Deserialize User
 passport.serializeUser((user, done) => done(null, user.email));
 passport.deserializeUser(async (email, done) => {
   try {
@@ -109,7 +121,8 @@ passport.deserializeUser(async (email, done) => {
   }
 });
 
-// Routes
+// ================== Routes ==================
+// Register
 app.post("/register", async (req, res) => {
   const { username: email, password } = req.body;
   try {
@@ -127,6 +140,7 @@ app.post("/register", async (req, res) => {
   }
 });
 
+// Login
 app.post("/login", (req, res, next) => {
   passport.authenticate("local", (err, user, info) => {
     if (err) return res.status(500).json({ error: "Server error" });
@@ -139,6 +153,7 @@ app.post("/login", (req, res, next) => {
   })(req, res, next);
 });
 
+// Logout
 app.get("/logout", (req, res, next) => {
   req.logout((err) => {
     if (err) return next(err);
@@ -146,12 +161,13 @@ app.get("/logout", (req, res, next) => {
   });
 });
 
+// Dashboard (Protected Route)
 app.get("/dashboard", async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: "Unauthorized" });
   res.json({ email: req.user.email });
 });
 
-// Google OAuth
+// Google OAuth Routes
 app.get("/auth/google", passport.authenticate("google", { scope: ["profile", "email"] }));
 
 app.get(
@@ -162,7 +178,7 @@ app.get(
   }
 );
 
-// WebSocket Connection
+// ================== WebSocket Server ==================
 wss.on("connection", (ws) => {
   console.log("🔗 New WebSocket client connected");
 
@@ -193,7 +209,7 @@ wss.on("connection", (ws) => {
   ws.on("close", () => console.log("❌ WebSocket client disconnected"));
 });
 
-// Start the server
+// ================== Start Server ==================
 server.listen(port, () => {
   console.log(`🚀 Server running on port ${port}`);
   console.log(`🌐 WebSocket server running on ws://localhost:${port}`);
