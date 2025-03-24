@@ -24,7 +24,7 @@ const wss = new WebSocketServer({ server });
 // Enable CORS
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL,
+    origin:"*",
     methods: ["GET", "POST"],
     credentials: true,
     allowedHeaders: ["Content-Type", "Authorization"],
