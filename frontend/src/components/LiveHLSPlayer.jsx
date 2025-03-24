@@ -72,7 +72,7 @@ const LiveHLSPlayer = () => {
 
     // Set the scheduled start time (example: 1 AM today)
     const today = new Date();
-    today.setHours(21, 23, 0, 0); // 1:00 AM
+    today.setHours(1, 35, 0, 0); // 1:00 AM
     const scheduledStartTime = today.getTime();
     setStartTime(scheduledStartTime);
 
