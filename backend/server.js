@@ -24,9 +24,10 @@ const wss = new WebSocketServer({ server });
 // Enable CORS
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL, // Ensure this is correctly set in .env
+    origin: process.env.FRONTEND_URL,
     methods: ["GET", "POST"],
     credentials: true,
+    allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
 
@@ -46,9 +47,12 @@ app.use(passport.session());
 
 // MongoDB Connection
 mongoose
-  .connect(process.env.MONGO_URI)
+  .connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true })
   .then(() => console.log("✅ Connected to MongoDB"))
-  .catch((err) => console.error("❌ MongoDB Connection Error:", err));
+  .catch((err) => {
+    console.error("❌ MongoDB Connection Error:", err);
+    process.exit(1);
+  });
 
 // User Schema & Model
 const userSchema = new mongoose.Schema({
@@ -135,9 +139,9 @@ app.post("/login", (req, res, next) => {
   })(req, res, next);
 });
 
-app.get("/logout", (req, res) => {
+app.get("/logout", (req, res, next) => {
   req.logout((err) => {
-    if (err) return res.status(500).json({ error: "Logout failed" });
+    if (err) return next(err);
     res.json({ message: "Logout successful" });
   });
 });
@@ -152,7 +156,7 @@ app.get("/auth/google", passport.authenticate("google", { scope: ["profile", "em
 
 app.get(
   "/auth/google/callback",
-  passport.authenticate("google", { failureRedirect: "/login" }),
+  passport.authenticate("google", { failureRedirect: `${process.env.FRONTEND_URL}/login` }),
   (req, res) => {
     res.redirect(`${process.env.FRONTEND_URL}/dashboard`);
   }
@@ -192,5 +196,5 @@ wss.on("connection", (ws) => {
 // Start the server
 server.listen(port, () => {
   console.log(`🚀 Server running on port ${port}`);
-  console.log(`🌐 WebSocket server running on wss://${process.env.BACKEND_URL}`);
+  console.log(`🌐 WebSocket server running on ws://localhost:${port}`);
 });
