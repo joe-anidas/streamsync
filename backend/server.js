@@ -6,23 +6,26 @@ import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
 import { Strategy as GoogleStrategy } from "passport-google-oauth2";
 import session from "express-session";
-import env from "dotenv";
+import dotenv from "dotenv";
 import cors from "cors";
-import { WebSocketServer, WebSocket } from "ws"; // Import WebSocketServer & WebSocket
-import http from "http"; // Import http module
+import { WebSocketServer } from "ws";
+import http from "http";
 
-env.config();
+dotenv.config();
 
 const app = express();
-const port = 3000;
-const wsPort = 8080; // WebSocket runs on port 8080
+const port = process.env.PORT || 3000;
 const saltRounds = 10;
-const wss = new WebSocketServer({ port: wsPort });
 
-// Enable CORS for frontend requests
+// Create an HTTP server for Express and WebSocket
+const server = http.createServer(app);
+const wss = new WebSocketServer({ server });
+
+// Enable CORS
 app.use(
   cors({
-    origin: "http://localhost:5173",
+    origin: [`${process.env.FRONTEND_URL}`], // Change this to your frontend URL
+    methods: ["GET", "POST"],
     credentials: true,
   })
 );
@@ -40,20 +43,20 @@ app.use(sessionParser);
 app.use(passport.initialize());
 app.use(passport.session());
 
-// Connect to MongoDB
-mongoose.connect(process.env.MONGO_URI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-});
+// MongoDB Connection
+mongoose
+  .connect(process.env.MONGO_URI)
+  .then(() => console.log("✅ Connected to MongoDB"))
+  .catch((err) => console.error("❌ MongoDB Connection Error:", err));
 
+// User Schema & Model
 const userSchema = new mongoose.Schema({
   email: String,
   password: String,
 });
-
 const User = mongoose.model("User", userSchema);
 
-// Passport local authentication
+// Passport Local Strategy
 passport.use(
   new LocalStrategy(async (username, password, done) => {
     try {
@@ -68,13 +71,13 @@ passport.use(
   })
 );
 
-// Passport Google authentication
+// Passport Google Strategy
 passport.use(
   new GoogleStrategy(
     {
       clientID: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-      callbackURL: "http://localhost:3000/auth/google/callback",
+      callbackURL: "https://streamsyncbackend.onrender.com/auth/google/callback",
     },
     async (accessToken, refreshToken, profile, done) => {
       try {
@@ -91,10 +94,7 @@ passport.use(
   )
 );
 
-passport.serializeUser((user, done) => {
-  done(null, user.email);
-});
-
+passport.serializeUser((user, done) => done(null, user.email));
 passport.deserializeUser(async (email, done) => {
   try {
     const user = await User.findOne({ email });
@@ -153,35 +153,20 @@ app.get(
   "/auth/google/callback",
   passport.authenticate("google", { failureRedirect: "/login" }),
   (req, res) => {
-    res.redirect("http://localhost:5173/dashboard");
+    res.redirect(`${process.env.FRONTEND_URL}/dashboard`); // Change this
   }
 );
 
-// Start Express server
-app.listen(port, () => {
-  console.log(`Express server running on port ${port}`);
-});
+// WebSocket Connection
+wss.on("connection", (ws) => {
+  console.log("🔗 New WebSocket client connected");
 
-
-wss.on("connection", (ws, req) => {
-  console.log("New WebSocket client connected");
-
-  ws.isAlive = true;
-
-  ws.on("pong", () => {
-    ws.isAlive = true;
-  });
-
-  // Handle incoming messages
   ws.on("message", (message) => {
     try {
       const data = JSON.parse(message);
+      console.log("📩 Message received:", data);
 
-      // Handle chat messages
       if (data.type === "chat") {
-        console.log(`Chat message from ${data.username}: ${data.message}`);
-
-        // Broadcast the chat message to all connected clients
         wss.clients.forEach((client) => {
           if (client.readyState === WebSocket.OPEN) {
             client.send(
@@ -196,22 +181,15 @@ wss.on("connection", (ws, req) => {
         });
       }
     } catch (error) {
-      console.error("Invalid WebSocket message received:", error);
+      console.error("❌ Invalid WebSocket message:", error);
     }
   });
 
-  ws.on("close", () => {
-    console.log("WebSocket client disconnected");
-  });
+  ws.on("close", () => console.log("❌ WebSocket client disconnected"));
 });
 
-// WebSocket Heartbeat (Prevents Unexpected Disconnections)
-setInterval(() => {
-  wss.clients.forEach((ws) => {
-    if (!ws.isAlive) return ws.terminate();
-    ws.isAlive = false;
-    ws.ping();
-  });
-}, 30000);
-
-console.log(`WebSocket server is running on ws://localhost:${wsPort}`);
+// Start the server
+server.listen(port, () => {
+  console.log(`🚀 Server running on port ${port}`);
+  console.log(`🌐 WebSocket server running on wss://streamsyncbackend.onrender.com`);
+});
