@@ -20,7 +20,7 @@ const LiveHLSPlayer = () => {
 
   // Connect to WebSocket server
   useEffect(() => {
-    const ws = new WebSocket("ws://localhost:8080");
+    const ws = new WebSocket("wss://streamsyncbackend.onrender.com");
     wsRef.current = ws;
 
     ws.onopen = () => {
