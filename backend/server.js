@@ -24,7 +24,7 @@ const wss = new WebSocketServer({ server });
 // Enable CORS
 app.use(
   cors({
-    origin: [`${process.env.FRONTEND_URL}`], // Change this to your frontend URL
+    origin: process.env.FRONTEND_URL, // Ensure this is correctly set in .env
     methods: ["GET", "POST"],
     credentials: true,
   })
@@ -33,6 +33,7 @@ app.use(
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
+// Express session setup
 const sessionParser = session({
   secret: process.env.SESSION_SECRET,
   resave: false,
@@ -77,7 +78,7 @@ passport.use(
     {
       clientID: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-      callbackURL: "https://streamsyncbackend.onrender.com/auth/google/callback",
+      callbackURL: `${process.env.BACKEND_URL}/auth/google/callback`,
     },
     async (accessToken, refreshToken, profile, done) => {
       try {
@@ -153,7 +154,7 @@ app.get(
   "/auth/google/callback",
   passport.authenticate("google", { failureRedirect: "/login" }),
   (req, res) => {
-    res.redirect(`${process.env.FRONTEND_URL}/dashboard`); // Change this
+    res.redirect(`${process.env.FRONTEND_URL}/dashboard`);
   }
 );
 
@@ -168,7 +169,7 @@ wss.on("connection", (ws) => {
 
       if (data.type === "chat") {
         wss.clients.forEach((client) => {
-          if (client.readyState === WebSocket.OPEN) {
+          if (client.readyState === ws.OPEN) {
             client.send(
               JSON.stringify({
                 type: "chat",
@@ -191,5 +192,5 @@ wss.on("connection", (ws) => {
 // Start the server
 server.listen(port, () => {
   console.log(`🚀 Server running on port ${port}`);
-  console.log(`🌐 WebSocket server running on wss://streamsyncbackend.onrender.com`);
+  console.log(`🌐 WebSocket server running on wss://${process.env.BACKEND_URL}`);
 });
