@@ -93,7 +93,7 @@ passport.use(
     {
       clientID: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-      callbackURL: `${process.env.BACKEND_URL}/auth/google/callback`,
+      callbackURL: `${process.env.BACKEND_URL}/auth/google/callback`, // Use BACKEND_URL dynamically
     },
     async (accessToken, refreshToken, profile, done) => {
       try {
@@ -174,6 +174,9 @@ app.get(
   "/auth/google/callback",
   passport.authenticate("google", { failureRedirect: `${process.env.FRONTEND_URL}/login` }),
   (req, res) => {
+    console.log("✅ Google OAuth Callback Successful");
+    console.log("Redirecting to:", `${process.env.FRONTEND_URL}/dashboard`);
+    
     res.redirect(`${process.env.FRONTEND_URL}/dashboard`);
   }
 );
@@ -212,5 +215,4 @@ wss.on("connection", (ws) => {
 // ================== Start Server ==================
 server.listen(port, () => {
   console.log(`🚀 Server running on port ${port}`);
-  console.log(`🌐 WebSocket server running on ws://localhost:${port}`);
 });
