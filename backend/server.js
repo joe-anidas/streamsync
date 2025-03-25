@@ -190,6 +190,13 @@ wss.on("connection", (ws) => {
   ws.on("close", () => console.log("❌ WebSocket client disconnected"));
 });
 
+//session checking
+app.get("/session", (req, res) => {
+  res.json(req.session);
+});
+
+
+
 // Start the server
 server.listen(port, () => {
   console.log(`🚀 Server running on port ${port}`);
