@@ -124,14 +124,20 @@ app.post("/register", async (req, res) => {
 
     const hash = await bcrypt.hash(password, saltRounds);
     const newUser = await User.create({ email, password: hash });
+
     req.login(newUser, (err) => {
       if (err) return res.status(500).json({ error: "Login after registration failed" });
-      res.json({ message: "Registration successful" });
+
+      req.session.save(() => { // 🔥 Force session save
+        console.log("💾 Session saved after registration:", req.session);
+        res.json({ message: "Registration successful", user: newUser.email });
+      });
     });
   } catch (err) {
     res.status(500).json({ error: "Server error" });
   }
 });
+
 
 app.post("/login", (req, res, next) => {
   passport.authenticate("local", (err, user, info) => {
@@ -140,10 +146,15 @@ app.post("/login", (req, res, next) => {
 
     req.logIn(user, (err) => {
       if (err) return res.status(500).json({ error: "Login failed" });
-      res.json({ message: "Login successful" });
+
+      req.session.save(() => { // 🔥 Force session save
+        console.log("💾 Session saved after login:", req.session);
+        res.json({ message: "Login successful", user: user.email });
+      });
     });
   })(req, res, next);
 });
+
 
 app.get("/logout", (req, res) => {
   req.logout((err) => {
