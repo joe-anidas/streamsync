@@ -3,7 +3,7 @@ import mongoose from 'mongoose';
 import bcrypt from 'bcrypt';
 import passport from 'passport';
 import { Strategy as LocalStrategy } from 'passport-local';
-import { Strategy as GoogleStrategy } from 'passport-google-oauth2';
+import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
 import session from 'express-session';
 import dotenv from 'dotenv';
 import cors from 'cors';
@@ -22,7 +22,7 @@ const wss = new WebSocketServer({ server });
 // ================== CORS Configuration ==================
 const allowedOrigins = [
   process.env.FRONTEND_URL,
-  'http://localhost:5173' // For local development
+  'http://localhost:5173'
 ].filter(Boolean);
 
 const corsOptions = {
@@ -46,16 +46,18 @@ app.options('*', cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Session configuration
+// Enhanced session configuration
 const sessionMiddleware = session({
   secret: process.env.SESSION_SECRET || 'your-secret-key',
   resave: false,
   saveUninitialized: false,
+  proxy: true, // Required for HTTPS behind proxy
   cookie: {
     secure: process.env.NODE_ENV === 'production',
     sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
     maxAge: 24 * 60 * 60 * 1000, // 24 hours
-    httpOnly: true
+    httpOnly: true,
+    domain: process.env.NODE_ENV === 'production' ? '.onrender.com' : undefined
   }
 });
 
@@ -101,7 +103,8 @@ passport.use(new GoogleStrategy({
   clientID: process.env.GOOGLE_CLIENT_ID,
   clientSecret: process.env.GOOGLE_CLIENT_SECRET,
   callbackURL: `${process.env.BACKEND_URL}/auth/google/callback`,
-  scope: ['profile', 'email']
+  scope: ['profile', 'email'],
+  state: true
 }, async (accessToken, refreshToken, profile, done) => {
   try {
     let user = await User.findOne({ email: profile.emails[0].value });
@@ -161,15 +164,22 @@ app.post('/login', (req, res, next) => {
 
 app.get('/logout', (req, res) => {
   req.logout(() => {
+    // Clear session cookie
+    res.clearCookie('connect.sid', {
+      domain: process.env.NODE_ENV === 'production' ? '.onrender.com' : undefined,
+      path: '/'
+    });
     res.json({ message: 'Logout successful' });
   });
 });
 
-app.get('/auth/google', passport.authenticate('google'));
+app.get('/auth/google', passport.authenticate('google', {
+  prompt: 'select_account'
+}));
 
 app.get('/auth/google/callback', 
   passport.authenticate('google', { 
-    failureRedirect: `${process.env.FRONTEND_URL}/login`,
+    failureRedirect: `${process.env.FRONTEND_URL}/login?error=google_auth_failed`,
     successRedirect: `${process.env.FRONTEND_URL}/dashboard`
   })
 );
@@ -181,23 +191,19 @@ app.get('/user', (req, res) => {
 
 // ================== WebSocket Server ==================
 wss.on('connection', (ws, req) => {
-  // Wrap in session middleware
   sessionMiddleware(req, {}, () => {
     if (!req.session.passport?.user) {
       ws.close(1008, 'Unauthorized');
       return;
     }
 
-    console.log('🔗 New WebSocket connection:', req.session.passport.user);
+    console.log('🔗 New WebSocket connection from:', req.session.passport.user);
 
-    ws.on('message', async (message) => {
+    ws.on('message', (message) => {
       try {
         const data = JSON.parse(message);
-        console.log('📩 Received message:', data);
-
-        // Broadcast to all clients
         wss.clients.forEach(client => {
-          if (client.readyState === ws.OPEN) {
+          if (client !== ws && client.readyState === ws.OPEN) {
             client.send(JSON.stringify({
               type: 'chat',
               user: req.user.email,
@@ -227,4 +233,5 @@ server.listen(port, () => {
   console.log(`🌐 WebSocket server ready`);
   console.log(`🔒 Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`🔄 CORS allowed origins: ${allowedOrigins.join(', ')}`);
+  console.log(`🔗 Backend URL: ${process.env.BACKEND_URL}`);
 });
