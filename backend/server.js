@@ -196,8 +196,9 @@ wss.on("connection", (ws) => {
 
 //session checking
 app.get("/session", (req, res) => {
-  res.json(req.session);
+  res.json({ session: req.session, user: req.user });
 });
+
 
 
 
