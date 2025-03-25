@@ -10,27 +10,49 @@ import dotenv from "dotenv";
 import cors from "cors";
 import { WebSocketServer } from "ws";
 import http from "http";
+import MongoStore from "connect-mongo";
 
 dotenv.config();
 
 const app = express();
 const port = process.env.PORT || 3000;
 const saltRounds = 10;
+const isProduction = process.env.NODE_ENV === "production";
 
 // Create HTTP server for Express + WebSocket
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server });
 
+// ================== Database Connection ==================
+mongoose.connect(process.env.MONGO_URI, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+})
+.then(() => console.log("✅ Connected to MongoDB"))
+.catch(err => {
+  console.error("❌ MongoDB Connection Error:", err);
+  process.exit(1);
+});
+
+// ================== Session Store ==================
+const sessionStore = MongoStore.create({
+  mongoUrl: process.env.MONGO_URI,
+  collectionName: "sessions",
+  ttl: 24 * 60 * 60, // 1 day
+});
+
 // ================== CORS Configuration ==================
 const corsOptions = {
-  origin: process.env.FRONTEND_URL || "https://streamsync-puce.vercel.app",
+  origin: isProduction 
+    ? [process.env.FRONTEND_URL, "https://streamsync-puce.vercel.app"] 
+    : "http://localhost:3000",
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   credentials: true,
   allowedHeaders: ["Content-Type", "Authorization"],
 };
 
 app.use(cors(corsOptions));
-app.options("*", cors(corsOptions)); // Handle preflight requests
+app.options("*", cors(corsOptions));
 
 // ================== Middleware ==================
 app.use(bodyParser.json());
@@ -41,10 +63,13 @@ const sessionParser = session({
   secret: process.env.SESSION_SECRET || "default_session_secret",
   resave: false,
   saveUninitialized: false,
+  store: sessionStore,
   cookie: {
-    secure: process.env.NODE_ENV === "production", // HTTPS in production
-    sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-    maxAge: 24 * 60 * 60 * 1000, // 24 hours
+    secure: isProduction,
+    sameSite: isProduction ? "none" : "lax",
+    maxAge: 24 * 60 * 60 * 1000,
+    httpOnly: true,
+    domain: isProduction ? new URL(process.env.FRONTEND_URL).hostname : undefined,
   },
 });
 
@@ -52,56 +77,62 @@ app.use(sessionParser);
 app.use(passport.initialize());
 app.use(passport.session());
 
-// ================== MongoDB Connection ==================
-mongoose
-  .connect(process.env.MONGO_URI, { 
-    useNewUrlParser: true, 
-    useUnifiedTopology: true 
-  })
-  .then(() => console.log("✅ Connected to MongoDB"))
-  .catch((err) => {
-    console.error("❌ MongoDB Connection Error:", err);
-    process.exit(1);
-  });
-
 // ================== User Model ==================
 const userSchema = new mongoose.Schema({
-  email: String,
+  email: { type: String, unique: true, required: true },
   password: String,
+  googleId: String,
+  createdAt: { type: Date, default: Date.now },
 });
+
 const User = mongoose.model("User", userSchema);
 
-// ================== Passport Strategies ==================
-// Local Strategy (Email/Password)
+// ================== Passport Configuration ==================
 passport.use(
-  new LocalStrategy(async (username, password, done) => {
+  new LocalStrategy({ usernameField: "email" }, async (email, password, done) => {
     try {
-      const user = await User.findOne({ email: username });
-      if (!user) return done(null, false, { message: "User not found" });
+      const user = await User.findOne({ email });
+      if (!user) return done(null, false, { message: "Incorrect email or password" });
 
       const valid = await bcrypt.compare(password, user.password);
-      return valid ? done(null, user) : done(null, false, { message: "Incorrect password" });
+      if (!valid) return done(null, false, { message: "Incorrect email or password" });
+
+      return done(null, user);
     } catch (err) {
       return done(err);
     }
   })
 );
 
-// Google OAuth Strategy
 passport.use(
   new GoogleStrategy(
     {
       clientID: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-      callbackURL: `${process.env.BACKEND_URL}/auth/google/callback`, // Use BACKEND_URL dynamically
+      callbackURL: `${process.env.BACKEND_URL}/auth/google/callback`,
+      passReqToCallback: true,
     },
-    async (accessToken, refreshToken, profile, done) => {
+    async (req, accessToken, refreshToken, profile, done) => {
       try {
-        let user = await User.findOne({ email: profile.email });
+        let user = await User.findOne({ 
+          $or: [
+            { email: profile.email },
+            { googleId: profile.id }
+          ]
+        });
+
         if (!user) {
-          const hashedPassword = await bcrypt.hash("google", saltRounds);
-          user = await User.create({ email: profile.email, password: hashedPassword });
+          const hashedPassword = await bcrypt.hash(profile.id, saltRounds);
+          user = await User.create({ 
+            email: profile.email, 
+            password: hashedPassword,
+            googleId: profile.id
+          });
+        } else if (!user.googleId) {
+          user.googleId = profile.id;
+          await user.save();
         }
+
         return done(null, user);
       } catch (err) {
         return done(err);
@@ -110,11 +141,13 @@ passport.use(
   )
 );
 
-// Serialize/Deserialize User
-passport.serializeUser((user, done) => done(null, user.email));
-passport.deserializeUser(async (email, done) => {
+passport.serializeUser((user, done) => {
+  done(null, user.id);
+});
+
+passport.deserializeUser(async (id, done) => {
   try {
-    const user = await User.findOne({ email });
+    const user = await User.findById(id);
     done(null, user || false);
   } catch (err) {
     done(err);
@@ -122,97 +155,173 @@ passport.deserializeUser(async (email, done) => {
 });
 
 // ================== Routes ==================
-// Register
+// Health Check
+app.get("/health", (req, res) => {
+  res.status(200).json({ 
+    status: "healthy",
+    uptime: process.uptime(),
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Auth Routes
 app.post("/register", async (req, res) => {
-  const { username: email, password } = req.body;
   try {
+    const { email, password } = req.body;
+    
+    if (!email || !password) {
+      return res.status(400).json({ error: "Email and password are required" });
+    }
+
     const existingUser = await User.findOne({ email });
-    if (existingUser) return res.status(400).json({ error: "User already exists" });
+    if (existingUser) {
+      return res.status(409).json({ error: "User already exists" });
+    }
 
     const hash = await bcrypt.hash(password, saltRounds);
     const newUser = await User.create({ email, password: hash });
+
     req.login(newUser, (err) => {
-      if (err) return res.status(500).json({ error: "Login after registration failed" });
-      res.json({ message: "Registration successful" });
+      if (err) {
+        return res.status(500).json({ error: "Login after registration failed" });
+      }
+      res.status(201).json({ 
+        message: "Registration successful",
+        user: { email: newUser.email, id: newUser._id }
+      });
     });
   } catch (err) {
-    res.status(500).json({ error: "Server error" });
+    res.status(500).json({ error: "Server error during registration" });
   }
 });
 
-// Login
 app.post("/login", (req, res, next) => {
   passport.authenticate("local", (err, user, info) => {
-    if (err) return res.status(500).json({ error: "Server error" });
+    if (err) return res.status(500).json({ error: "Authentication error" });
     if (!user) return res.status(401).json({ error: info.message || "Invalid credentials" });
 
     req.logIn(user, (err) => {
-      if (err) return res.status(500).json({ error: "Login failed" });
-      res.json({ message: "Login successful" });
+      if (err) return res.status(500).json({ error: "Session creation failed" });
+      res.json({ 
+        message: "Login successful",
+        user: { email: user.email, id: user._id }
+      });
     });
   })(req, res, next);
 });
 
-// Logout
-app.get("/logout", (req, res, next) => {
-  req.logout((err) => {
-    if (err) return next(err);
+app.post("/logout", (req, res) => {
+  req.session.destroy((err) => {
+    if (err) return res.status(500).json({ error: "Logout failed" });
+    
+    res.clearCookie("connect.sid", {
+      path: "/",
+      domain: isProduction ? new URL(process.env.FRONTEND_URL).hostname : undefined,
+      secure: isProduction,
+      sameSite: isProduction ? "none" : "lax",
+    });
+    
     res.json({ message: "Logout successful" });
   });
 });
 
-// Dashboard (Protected Route)
-app.get("/dashboard", async (req, res) => {
-  if (!req.isAuthenticated()) return res.status(401).json({ error: "Unauthorized" });
-  res.json({ email: req.user.email });
+app.get("/session", (req, res) => {
+  if (req.isAuthenticated()) {
+    res.json({ 
+      authenticated: true, 
+      user: { email: req.user.email, id: req.user._id } 
+    });
+  } else {
+    res.json({ authenticated: false });
+  }
 });
 
-// Google OAuth Routes
-app.get("/auth/google", passport.authenticate("google", { scope: ["profile", "email"] }));
+// Protected Routes
+app.get("/dashboard", (req, res) => {
+  if (!req.isAuthenticated()) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+  res.json({ 
+    email: req.user.email,
+    id: req.user._id
+  });
+});
+
+// OAuth Routes
+app.get("/auth/google", passport.authenticate("google", { 
+  scope: ["profile", "email"],
+  prompt: "select_account"
+}));
 
 app.get(
   "/auth/google/callback",
-  passport.authenticate("google", { failureRedirect: `${process.env.FRONTEND_URL}/login` }),
+  passport.authenticate("google", { 
+    failureRedirect: `${process.env.FRONTEND_URL}/login?error=google_auth_failed` 
+  }),
   (req, res) => {
-    console.log("✅ Google OAuth Callback Successful");
-    console.log("Redirecting to:", `${process.env.FRONTEND_URL}/dashboard`);
-    
     res.redirect(`${process.env.FRONTEND_URL}/dashboard`);
   }
 );
 
 // ================== WebSocket Server ==================
-wss.on("connection", (ws) => {
-  console.log("🔗 New WebSocket client connected");
-
-  ws.on("message", (message) => {
-    try {
-      const data = JSON.parse(message);
-      console.log("📩 Message received:", data);
-
-      if (data.type === "chat") {
-        wss.clients.forEach((client) => {
-          if (client.readyState === ws.OPEN) {
-            client.send(
-              JSON.stringify({
-                type: "chat",
-                username: data.username,
-                message: data.message,
-                timestamp: new Date().toISOString(),
-              })
-            );
-          }
-        });
-      }
-    } catch (error) {
-      console.error("❌ Invalid WebSocket message:", error);
+wss.on("connection", (ws, req) => {
+  sessionParser(req, {}, () => {
+    if (!req.session.passport?.user) {
+      ws.close(1008, "Unauthorized");
+      return;
     }
-  });
 
-  ws.on("close", () => console.log("❌ WebSocket client disconnected"));
+    console.log("🔗 New authenticated WebSocket connection");
+
+    ws.on("message", async (message) => {
+      try {
+        const data = JSON.parse(message);
+        
+        // Verify user is still authenticated
+        const user = await User.findById(req.session.passport.user);
+        if (!user) {
+          ws.close(1008, "User not found");
+          return;
+        }
+
+        // Broadcast chat messages
+        if (data.type === "chat") {
+          const messageData = {
+            type: "chat",
+            userId: user._id,
+            email: user.email,
+            message: data.message,
+            timestamp: new Date().toISOString(),
+          };
+
+          // Broadcast to all connected clients
+          wss.clients.forEach(client => {
+            if (client !== ws && client.readyState === ws.OPEN) {
+              client.send(JSON.stringify(messageData));
+            }
+          });
+        }
+      } catch (error) {
+        console.error("WebSocket message error:", error);
+      }
+    });
+
+    ws.on("close", () => {
+      console.log("❌ WebSocket client disconnected");
+    });
+  });
+});
+
+// ================== Error Handling ==================
+app.use((err, req, res, next) => {
+  console.error("Server error:", err);
+  res.status(500).json({ error: "Internal server error" });
 });
 
 // ================== Start Server ==================
 server.listen(port, () => {
   console.log(`🚀 Server running on port ${port}`);
+  console.log(`🛡️ CORS configured for: ${corsOptions.origin}`);
+  console.log(`🔐 Secure cookies: ${isProduction}`);
+  console.log(`🌐 Environment: ${process.env.NODE_ENV || "development"}`);
 });
