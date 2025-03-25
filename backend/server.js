@@ -6,6 +6,7 @@ import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
 import { Strategy as GoogleStrategy } from "passport-google-oauth2";
 import session from "express-session";
+import MongoStore from "connect-mongo";
 import dotenv from "dotenv";
 import cors from "cors";
 import { WebSocketServer } from "ws";
@@ -24,36 +25,40 @@ const wss = new WebSocketServer({ server });
 // Enable CORS
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL, // Ensure this is correctly set in .env
+    origin: process.env.FRONTEND_URL, 
     methods: ["GET", "POST"],
-    credentials: true,
+    credentials: true, 
   })
 );
 
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
-// Express session setup
+// MongoDB Connection
+mongoose
+  .connect(process.env.MONGO_URI)
+  .then(() => console.log("✅ Connected to MongoDB"))
+  .catch((err) => console.error("❌ MongoDB Connection Error:", err));
+
+// Express session setup with MongoDB store
 const sessionParser = session({
   secret: process.env.SESSION_SECRET,
   resave: false,
   saveUninitialized: false,
+  store: MongoStore.create({
+    mongoUrl: process.env.MONGO_URI, 
+    collectionName: "sessions",
+  }),
   cookie: {
-    secure: process.env.NODE_ENV === "production", // Only secure in production
-    httpOnly: true, // Prevents client-side JavaScript from accessing cookies
-    sameSite: "none", // Important for cross-origin requests
+    secure: process.env.NODE_ENV === "production", 
+    httpOnly: true,
+    sameSite: "none",
   },
 });
 
 app.use(sessionParser);
 app.use(passport.initialize());
 app.use(passport.session());
-
-// MongoDB Connection
-mongoose
-  .connect(process.env.MONGO_URI)
-  .then(() => console.log("✅ Connected to MongoDB"))
-  .catch((err) => console.error("❌ MongoDB Connection Error:", err));
 
 // User Schema & Model
 const userSchema = new mongoose.Schema({
@@ -194,16 +199,13 @@ wss.on("connection", (ws) => {
   ws.on("close", () => console.log("❌ WebSocket client disconnected"));
 });
 
-//session checking
+// Session Debugging Route
 app.get("/session", (req, res) => {
   res.json({ session: req.session, user: req.user });
 });
 
-
-
-
 // Start the server
 server.listen(port, () => {
   console.log(`🚀 Server running on port ${port}`);
-  console.log(`🌐 WebSocket server running on wss://${process.env.BACKEND_URL}`);
+  console.log(`🌐 WebSocket server running on wss://${new URL(process.env.BACKEND_URL).hostname}`);
 });
