@@ -64,11 +64,26 @@ const Dashboard = () => {
  // ...existing code...
  return (
   <div>
-    <header id="header">
-      <div className="logo-container">
-        <img src={logo} alt="StreamSync Logo" className="logo" />
-        <h1 className="app-name">StreamSync</h1>
-      </div>
+    <header 
+  id="header" 
+>
+  <div 
+    className="logo-container" 
+  >
+    <img 
+      src={logo} 
+      alt="StreamSync Logo" 
+      className="logo" 
+    /><h1 
+    className="app-name" 
+    style={{ margin: '0', flexGrow: 2, textAlign: 'center', fontSize: '24px', fontWeight: 'bold' }}
+  >
+    StreamSync
+  </h1>
+  </div>
+  
+
+
       <div className="search-bar">
         <input type="text" placeholder="Search videos, channels, or categories..." />
       </div>

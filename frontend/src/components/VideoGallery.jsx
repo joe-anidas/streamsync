@@ -3,10 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import 'slick-carousel/slick/slick.css';
 import 'slick-carousel/slick/slick-theme.css';
 import './css/videogallery.css';
-import img1 from "./img/img1.png";
-import img2 from "./img/img2.png";
-import img3 from "./img/img3.png";
-import img4 from "./img/img4.png";
+import img1 from "./img/img.jpg";
+import img2 from "./img/img4.jpg";
+import img3 from "./img/img3.jpg";
+import img4 from "./img/img2.jpeg";
 import SliderContainer from "./SliderContainer";
 
 const VideoGallery = () => {
