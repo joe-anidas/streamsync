@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import logo from "./img/logo.jpg";
+import logo from "./img/logo1.jpg";
 import "./css/dashboard.css";
 import VideoGallery from "./VideoGallery";
 
@@ -78,7 +78,7 @@ const Dashboard = () => {
     className="app-name" 
     style={{ margin: '0', flexGrow: 2, textAlign: 'center', fontSize: '24px', fontWeight: 'bold' }}
   >
-    StreamSync
+    StreamSyncJJ
   </h1>
   </div>
   

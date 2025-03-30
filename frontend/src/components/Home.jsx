@@ -143,7 +143,7 @@ const Home = () => {
   return (
     <div style={styles.homeWrapper} className="home-wrapper">
       <div style={styles.homeCard} className="home-card">
-        <h2 style={styles.homeHeading}>Welcome to StreamSync</h2>
+        <h2 style={styles.homeHeading}>Welcome to StreamSyncJJ</h2>
         <div style={styles.homeButtonContainer}>
           <button 
             style={styles.homeLoginBtn}
